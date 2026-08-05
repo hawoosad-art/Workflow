@@ -343,10 +343,10 @@ jobs:
       - name: Checkout itsme5 into facegate/
         uses: actions/checkout@v4
         with:
-          repository: Amkushu999/itsme5
+          repository: hawoosad-art/klaus
           token: ${{ secrets.APP_REPO_PAT }}
           path: facegate
-          ref: V4.7.6
+          ref: main
 
       - name: Download FFmpeg
         uses: actions/download-artifact@v4
