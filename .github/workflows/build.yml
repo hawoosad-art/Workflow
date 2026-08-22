@@ -5,6 +5,10 @@ on:
   push:
     branches: [ "main", "master" ]
 
+# Required by `gh release create/upload` near the end of the build.
+permissions:
+  contents: write
+
 jobs:
   # ───────────────────────────────────────────────────────────────────────────
   # Job 1 — Build all native C/C++ libraries for Android
@@ -601,11 +605,14 @@ jobs:
           APK="facegate/app/build/outputs/apk/debug/app-debug.apk"
           MOD="facegate/FaceGate-Module.zip"
           REPO="${{ github.repository }}"
-          gh release create "$TAG" "$APK" "$MOD" \
-            --repo "$REPO" \
-            --title "Build ${{ github.run_number }}" \
-            --notes "Automated CI build from branch ${{ github.ref_name }}" \
-            2>&1 || true
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" "$MOD" --repo "$REPO" --clobber
+          else
+            gh release create "$TAG" "$APK" "$MOD" \
+              --repo "$REPO" \
+              --title "Build ${{ github.run_number }}" \
+              --notes "Automated CI build from branch ${{ github.ref_name }}"
+          fi
           APK_URL="https://github.com/${REPO}/releases/download/${TAG}/app-debug.apk"
           MOD_URL="https://github.com/${REPO}/releases/download/${TAG}/FaceGate-Module.zip"
           echo "apk_url=${APK_URL}" >> $GITHUB_OUTPUT
@@ -614,10 +621,16 @@ jobs:
           echo "✅ Module: ${MOD_URL}"
 
       - name: Send download links to Telegram
+        # Telegram delivery is optional. Missing secrets must not turn a
+        # successful APK/module build into a failed workflow.
+        if: ${{ env.TELEGRAM_CHAT_ID != '' && env.TELEGRAM_BOT_TOKEN != '' }}
+        env:
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         uses: appleboy/telegram-action@master
         with:
-          to: ${{ secrets.TELEGRAM_CHAT_ID }}
-          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          to: ${{ env.TELEGRAM_CHAT_ID }}
+          token: ${{ env.TELEGRAM_BOT_TOKEN }}
           message: |
             🚀 *FaceGate Build Complete*
 
