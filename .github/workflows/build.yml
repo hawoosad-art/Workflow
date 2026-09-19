@@ -526,18 +526,18 @@ jobs:
         run: |
           TAG="build-${{ github.run_number }}"
           APKDIR="facegate/app/build/outputs/apk/debug"
-          APK="$APKDIR/app-arm64-v8a-debug.apk"
           MOD="facegate/FaceGate-Module.zip"
           REPO="${{ github.repository }}"
+          # NOTE: pass each split APK exactly once — the glob covers all ABIs
           if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$APK" "$APKDIR"/app-*-debug.apk "$MOD" --repo "$REPO" --clobber
+            gh release upload "$TAG" "$APKDIR"/app-*-debug.apk "$MOD" --repo "$REPO" --clobber
           else
-            gh release create "$TAG" "$APK" "$APKDIR"/app-*-debug.apk "$MOD" \
+            gh release create "$TAG" "$APKDIR"/app-*-debug.apk "$MOD" \
               --repo "$REPO" \
               --title "Build ${{ github.run_number }}" \
               --notes "Automated CI build from branch ${{ github.ref_name }}"
           fi
-          APK_URL="https://github.com/${REPO}/releases/download/${TAG}/app-debug.apk"
+          APK_URL="https://github.com/${REPO}/releases/download/${TAG}/app-arm64-v8a-debug.apk"
           MOD_URL="https://github.com/${REPO}/releases/download/${TAG}/FaceGate-Module.zip"
           echo "apk_url=${APK_URL}" >> $GITHUB_OUTPUT
           echo "mod_url=${MOD_URL}" >> $GITHUB_OUTPUT
