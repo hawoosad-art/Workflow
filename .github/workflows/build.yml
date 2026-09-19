@@ -1,4 +1,4 @@
-name: Build FaceGate (FFmpeg + libyuv + ShadowHook-static + APK + Magisk Module)
+name: Build ItsAnon FaceGate (GStreamer + libyuv + ShadowHook-static + APK + Magisk Module)
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ jobs:
   # Job 1 — Build all native C/C++ libraries for Android
   # ───────────────────────────────────────────────────────────────────────────
   build-native-libs:
-    name: Native Libs (FFmpeg · libyuv · ShadowHook-static · turbojpeg)
+    name: Native Libs (libyuv · ShadowHook-static · turbojpeg)
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -39,78 +39,6 @@ jobs:
           fi
           echo "NDK=$PWD/android-ndk-r25c"              >> $GITHUB_ENV
           echo "ANDROID_NDK_ROOT=$PWD/android-ndk-r25c" >> $GITHUB_ENV
-
-      # ── OpenSSL ─────────────────────────────────────────────────────────────
-      - name: Build OpenSSL for Android
-        run: |
-          git clone --depth 1 --branch openssl-3.1.4 \
-            https://github.com/openssl/openssl.git openssl-src
-          TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/linux-x86_64
-          API=24
-
-          build_openssl() {
-            local ABI=$1 ARCH=$2 OPTS=$3
-            export ANDROID_NDK_ROOT=$NDK
-            export PATH=$TOOLCHAIN/bin:$PATH
-            mkdir -p openssl-src/build-$ABI
-            cd openssl-src/build-$ABI
-            ../Configure android-$ARCH -D__ANDROID_API__=$API \
-              --prefix=$GITHUB_WORKSPACE/openssl/$ABI \
-              --openssldir=$GITHUB_WORKSPACE/openssl/$ABI \
-              no-shared no-tests no-ui-console $OPTS
-            make -j$(nproc) && make install_sw
-            cd ../..
-          }
-          build_openssl "arm64-v8a"   "arm64"  ""
-          build_openssl "armeabi-v7a" "arm"    "no-asm"
-          build_openssl "x86_64"      "x86_64" ""
-
-      # ── FFmpeg ──────────────────────────────────────────────────────────────
-      - name: Clone FFmpeg n9.0
-        run: git clone --depth 1 --branch n9.0 https://github.com/FFmpeg/FFmpeg.git ffmpeg-src
-
-      - name: Build FFmpeg for Android
-        working-directory: ffmpeg-src
-        run: |
-          TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/linux-x86_64
-          API=24
-
-          build_abi() {
-            local ABI=$1 ARCH=$2 CPU=$3 TARGET=$4
-            export AR=$TOOLCHAIN/bin/llvm-ar
-            export NM=$TOOLCHAIN/bin/llvm-nm
-            export CC=$TOOLCHAIN/bin/${TARGET}${API}-clang
-            export CXX=$TOOLCHAIN/bin/${TARGET}${API}-clang++
-            export RANLIB=$TOOLCHAIN/bin/llvm-ranlib
-            export STRIP=$TOOLCHAIN/bin/llvm-strip
-            OPENSSL_PREFIX=$GITHUB_WORKSPACE/openssl/$ABI
-            export CFLAGS="-O3 -fPIC -DANDROID -I$OPENSSL_PREFIX/include"
-            export LDFLAGS="-fPIC -L$OPENSSL_PREFIX/lib"
-            make distclean > /dev/null 2>&1 || true
-            ./configure \
-              --target-os=android --arch=$ARCH --cpu=$CPU --enable-cross-compile \
-              --sysroot=$TOOLCHAIN/sysroot --cc=$CC --cxx=$CXX --ar=$AR --nm=$NM \
-              --ranlib=$RANLIB --strip=$STRIP \
-              --prefix=$GITHUB_WORKSPACE/output/$ABI \
-              --pkg-config=false --enable-static --disable-shared \
-              --disable-programs --disable-doc --disable-iconv \
-              --disable-avdevice --disable-avfilter \
-              --disable-asm --disable-x86asm --enable-pic \
-              --enable-jni --enable-mediacodec --enable-network \
-              --enable-swresample --enable-swscale --enable-openssl \
-              --extra-cflags="-I$OPENSSL_PREFIX/include" \
-              --extra-ldflags="-L$OPENSSL_PREFIX/lib" \
-              --enable-protocol=file,pipe,http,https,tcp,udp,rtp,rtsp,rtmp,hls \
-              --enable-demuxer=rtsp,http,hls,rtmp,mov,mp4,mkv,avi,flv,mpegts,mjpeg,rawvideo \
-              --enable-decoder=h264,h264_mediacodec,hevc,hevc_mediacodec,vp8,vp9,av1,aac,mp3,opus,rawvideo,pcm_s16le \
-              --enable-parser=h264,hevc,vp8,vp9,av1,aac,mpegaudio,opus \
-              --enable-bsf=h264_mp4toannexb,hevc_mp4toannexb,aac_adtstoasc \
-              --enable-muxer=mp4,mov,matroska,null
-            make -j$(nproc) && make install
-          }
-          build_abi "arm64-v8a"   "aarch64" "armv8-a" "aarch64-linux-android"
-          build_abi "armeabi-v7a" "arm"     "armv7-a" "armv7a-linux-androideabi"
-          build_abi "x86_64"      "x86_64"  "x86-64"  "x86_64-linux-android"
 
       # ── libyuv (Google Chromium) ─────────────────────────────────────────────
       - name: Build libyuv for Android
@@ -301,20 +229,6 @@ jobs:
           build_tj "x86_64"
 
       # ── Upload all native artifacts ──────────────────────────────────────────
-      - name: Upload FFmpeg
-        uses: actions/upload-artifact@v4
-        with:
-          name: ffmpeg-android-prebuilt
-          path: output/
-          retention-days: 14
-
-      - name: Upload OpenSSL
-        uses: actions/upload-artifact@v4
-        with:
-          name: openssl-android-prebuilt
-          path: openssl/
-          retention-days: 14
-
       - name: Upload libyuv
         uses: actions/upload-artifact@v4
         with:
@@ -352,18 +266,6 @@ jobs:
           path: facegate
           ref: main
 
-      - name: Download FFmpeg
-        uses: actions/download-artifact@v4
-        with:
-          name: ffmpeg-android-prebuilt
-          path: facegate/ffmpeg-android
-
-      - name: Download OpenSSL
-        uses: actions/download-artifact@v4
-        with:
-          name: openssl-android-prebuilt
-          path: facegate/openssl-android
-
       - name: Download libyuv
         uses: actions/download-artifact@v4
         with:
@@ -382,6 +284,24 @@ jobs:
           name: turbojpeg-android-prebuilt
           path: facegate/turbojpeg-android
 
+      - name: Download + stage GStreamer Android SDK (1.28.7, arm64 + armv7)
+        run: |
+          GST_VER=1.28.7
+          GST_TARBALL=gstreamer-1.0-android-universal-${GST_VER}.tar.xz
+          wget -q "https://gstreamer.freedesktop.org/data/pkg/android/${GST_VER}/${GST_TARBALL}"
+          mkdir -p gst-extract
+          # Extract only the two ABIs the app builds (full trees: include/lib/share/bin)
+          tar -xf "${GST_TARBALL}" -C gst-extract arm64 armv7
+          rm -f "${GST_TARBALL}"
+          # The app's CMake resolves ${GSTREAMER_ROOT}/${ANDROID_ABI} — rename to ANDROID_ABI names
+          mkdir -p facegate/gstreamer-android
+          mv gst-extract/arm64 facegate/gstreamer-android/arm64-v8a
+          mv gst-extract/armv7 facegate/gstreamer-android/armeabi-v7a
+          rmdir gst-extract
+          echo "=== Staged GStreamer SDK ==="
+          ls facegate/gstreamer-android/
+          ls facegate/gstreamer-android/arm64-v8a/share/cmake/
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -393,6 +313,9 @@ jobs:
 
       - name: Accept Android licenses
         run: yes | sdkmanager --licenses || true
+
+      - name: Install NDK pinned by app/build.gradle.kts (29.0.14206865)
+        run: sdkmanager --install "ndk;29.0.14206865" "cmake;3.22.1" >/dev/null
 
       - name: Cache NDK r25c
         uses: actions/cache@v4
@@ -412,17 +335,16 @@ jobs:
       - name: Generate local.properties
         working-directory: facegate
         run: |
-          echo "sdk.dir=$ANDROID_SDK_ROOT"                              >> local.properties
-          echo "ffmpeg.dir=$GITHUB_WORKSPACE/facegate/ffmpeg-android"   >> local.properties
-          echo "openssl.dir=$GITHUB_WORKSPACE/facegate/openssl-android"  >> local.properties
-          echo "libyuv.dir=$GITHUB_WORKSPACE/facegate/libyuv-android"   >> local.properties
+          echo "sdk.dir=$ANDROID_SDK_ROOT"                                  >> local.properties
+          echo "gstreamer.dir=$GITHUB_WORKSPACE/facegate/gstreamer-android" >> local.properties
+          echo "libyuv.dir=$GITHUB_WORKSPACE/facegate/libyuv-android"       >> local.properties
 
       - name: Make gradlew executable
         working-directory: facegate
         run: chmod +x ./gradlew
 
       - name: Install CMake + Ninja
-        run: sudo apt-get install -y cmake ninja-build
+        run: sudo apt-get install -y cmake ninja-build pkg-config
 
       # ── Build hookProxy.so ──────────────────────────────────────────────────
       - name: Build hookProxy.so (arm64-v8a + armeabi-v7a)
@@ -455,8 +377,8 @@ jobs:
             echo "=== hookProxy.so for $ABI: $(ls -lh $BUILD/libhookProxy.so) ==="
           done
 
-      # ── Build amkush_injector (AndKittyInjector + --pid patch) ─────────────
-      - name: Build amkush_injector (ptrace injection binary — --pid patched)
+      # ── Build itsanon_injector (AndKittyInjector + --pid patch) ─────────────
+      - name: Build itsanon_injector (ptrace injection binary — --pid patched)
         run: |
           if [ ! -f "$NDK/ndk-build" ]; then
             echo "ERROR: ndk-build not found at $NDK/ndk-build"
@@ -483,14 +405,14 @@ jobs:
             -j$(nproc)
 
           OUT="AndKittyInjector-src/AndKittyInjector/libs"
-          echo "=== amkush_injector build output ==="
+          echo "=== itsanon_injector build output ==="
           find "$OUT" -type f | sort
 
           mkdir -p facegate/zygisk-module/injector-out
           [ -f "$OUT/arm64-v8a/AndKittyInjector" ]   && \
-            cp "$OUT/arm64-v8a/AndKittyInjector"   facegate/zygisk-module/injector-out/amkush_injector64
+            cp "$OUT/arm64-v8a/AndKittyInjector"   facegate/zygisk-module/injector-out/itsanon_injector64
           [ -f "$OUT/armeabi-v7a/AndKittyInjector" ] && \
-            cp "$OUT/armeabi-v7a/AndKittyInjector" facegate/zygisk-module/injector-out/amkush_injector32
+            cp "$OUT/armeabi-v7a/AndKittyInjector" facegate/zygisk-module/injector-out/itsanon_injector32
 
           echo "=== injector-out ==="
           ls -la facegate/zygisk-module/injector-out
@@ -533,10 +455,10 @@ jobs:
           cp facegate/zygisk-build-arm64-v8a/libhookProxy.so   "$ASSETS/system/lib64/libhookProxy.so"
           cp facegate/zygisk-build-armeabi-v7a/libhookProxy.so "$ASSETS/system/lib/libhookProxy.so"
 
-          INJ64="facegate/zygisk-module/injector-out/amkush_injector64"
-          INJ32="facegate/zygisk-module/injector-out/amkush_injector32"
-          [ -f "$INJ64" ] && cp "$INJ64" "$ASSETS/system/bin/amkush_injector64" && chmod 0755 "$ASSETS/system/bin/amkush_injector64"
-          [ -f "$INJ32" ] && cp "$INJ32" "$ASSETS/system/bin/amkush_injector32" && chmod 0755 "$ASSETS/system/bin/amkush_injector32"
+          INJ64="facegate/zygisk-module/injector-out/itsanon_injector64"
+          INJ32="facegate/zygisk-module/injector-out/itsanon_injector32"
+          [ -f "$INJ64" ] && cp "$INJ64" "$ASSETS/system/bin/itsanon_injector64" && chmod 0755 "$ASSETS/system/bin/itsanon_injector64"
+          [ -f "$INJ32" ] && cp "$INJ32" "$ASSETS/system/bin/itsanon_injector32" && chmod 0755 "$ASSETS/system/bin/itsanon_injector32"
 
           WD64="facegate/zygisk-module/injector-out/watchdog_daemon_arm64_v8a"
           WD32="facegate/zygisk-module/injector-out/watchdog_daemon_armeabi_v7a"
@@ -564,10 +486,10 @@ jobs:
           cp facegate/zygisk-build-arm64-v8a/libhookProxy.so   "$PKG/system/lib64/libhookProxy.so"
           cp facegate/zygisk-build-armeabi-v7a/libhookProxy.so "$PKG/system/lib/libhookProxy.so"
 
-          INJ64="facegate/zygisk-module/injector-out/amkush_injector64"
-          INJ32="facegate/zygisk-module/injector-out/amkush_injector32"
-          [ -f "$INJ64" ] && cp "$INJ64" "$PKG/system/bin/amkush_injector64" && chmod 0755 "$PKG/system/bin/amkush_injector64" && echo "Bundled amkush_injector64"
-          [ -f "$INJ32" ] && cp "$INJ32" "$PKG/system/bin/amkush_injector32" && chmod 0755 "$PKG/system/bin/amkush_injector32" && echo "Bundled amkush_injector32"
+          INJ64="facegate/zygisk-module/injector-out/itsanon_injector64"
+          INJ32="facegate/zygisk-module/injector-out/itsanon_injector32"
+          [ -f "$INJ64" ] && cp "$INJ64" "$PKG/system/bin/itsanon_injector64" && chmod 0755 "$PKG/system/bin/itsanon_injector64" && echo "Bundled itsanon_injector64"
+          [ -f "$INJ32" ] && cp "$INJ32" "$PKG/system/bin/itsanon_injector32" && chmod 0755 "$PKG/system/bin/itsanon_injector32" && echo "Bundled itsanon_injector32"
 
           WD64="facegate/zygisk-module/injector-out/watchdog_daemon_arm64_v8a"
           WD32="facegate/zygisk-module/injector-out/watchdog_daemon_armeabi_v7a"
@@ -583,7 +505,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: FaceGate-APK
-          path: facegate/app/build/outputs/apk/debug/app-debug.apk
+          path: facegate/app/build/outputs/apk/debug/*-debug.apk
           retention-days: 14
 
       - name: Upload Magisk module ZIP
@@ -602,13 +524,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="build-${{ github.run_number }}"
-          APK="facegate/app/build/outputs/apk/debug/app-debug.apk"
+          APKDIR="facegate/app/build/outputs/apk/debug"
+          APK="$APKDIR/app-arm64-v8a-debug.apk"
           MOD="facegate/FaceGate-Module.zip"
           REPO="${{ github.repository }}"
           if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$APK" "$MOD" --repo "$REPO" --clobber
+            gh release upload "$TAG" "$APK" "$APKDIR"/app-*-debug.apk "$MOD" --repo "$REPO" --clobber
           else
-            gh release create "$TAG" "$APK" "$MOD" \
+            gh release create "$TAG" "$APK" "$APKDIR"/app-*-debug.apk "$MOD" \
               --repo "$REPO" \
               --title "Build ${{ github.run_number }}" \
               --notes "Automated CI build from branch ${{ github.ref_name }}"
