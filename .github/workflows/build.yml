@@ -262,7 +262,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: hawoosad-art/itsmej
-          token: ${{ secrets.APP_REPO_PAT }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           path: facegate
           ref: main
 
