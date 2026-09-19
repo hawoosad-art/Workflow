@@ -309,10 +309,14 @@ jobs:
           distribution: 'temurin'
 
       - name: Accept Android licenses
-        run: yes | sdkmanager --licenses || true
+        run: |
+          SDKM="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --licenses > /dev/null || true
 
-      - name: Install NDK pinned by app/build.gradle.kts (29.0.14206865)
-        run: sdkmanager --install "ndk;29.0.14206865" "cmake;3.22.1" >/dev/null
+      - name: Install NDK pinned by app/build.gradle.kts + SDK components
+        run: |
+          SDKM="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin/sdkmanager"
+          "$SDKM" --install "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;29.0.14206865" "cmake;3.22.1"
 
       - name: Cache NDK r25c
         uses: actions/cache@v4
@@ -332,7 +336,7 @@ jobs:
       - name: Generate local.properties
         working-directory: facegate
         run: |
-          echo "sdk.dir=$ANDROID_SDK_ROOT"                                  >> local.properties
+          echo "sdk.dir=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"    >> local.properties
           echo "gstreamer.dir=$GITHUB_WORKSPACE/facegate/gstreamer-android" >> local.properties
           echo "libyuv.dir=$GITHUB_WORKSPACE/facegate/libyuv-android"       >> local.properties
 
