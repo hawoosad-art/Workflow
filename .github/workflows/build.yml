@@ -2,6 +2,11 @@ name: Build ItsAnon FaceGate (GStreamer + libyuv + ShadowHook-static + APK + Mag
 
 on:
   workflow_dispatch:
+    inputs:
+      app_ref:
+        description: 'itsmej branch/ref to build'
+        required: false
+        default: 'main'
   push:
     branches: [ "main", "master" ]
 
@@ -264,7 +269,7 @@ jobs:
           repository: hawoosad-art/itsmej
           token: ${{ secrets.GITHUB_TOKEN }}
           path: facegate
-          ref: main
+          ref: ${{ github.event.inputs.app_ref || 'main' }}
 
       - name: Download libyuv
         uses: actions/download-artifact@v4
